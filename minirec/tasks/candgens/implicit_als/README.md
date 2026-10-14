@@ -26,4 +26,4 @@ The quality test trains the model on the first 50 days of a synthetic log with b
 (cd engine_builder && uv run pytest tests/models/test_implicit_als.py)
 ```
 
-The task counts as solved only if both test sets pass: the candidate generator and the training.
+Both test sets must pass: the candidate generator and the training.

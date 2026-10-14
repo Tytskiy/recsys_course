@@ -1,125 +1,49 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { SOURCE_TYPES, STORAGE_KEY } from "../constants";
-import type { DraftRequest, SourceType } from "../types";
+import { useState, type FormEvent } from "react";
+import { DEFAULT_DRAFT, readDraft, saveDraft, splitIds, toRequest, type Draft } from "../draft";
+import { SOURCE_TYPES, type FieldError, type RecommendRequest, type SourceType } from "../types";
+import { ErrorBanner } from "./ErrorBanner";
 
 type Props = {
-  onSubmit: (draft: DraftRequest) => void;
+  onSubmit: (request: RecommendRequest) => void;
   submitting: boolean;
-  catalogReady: boolean;
 };
 
-const DEFAULT_DRAFT: DraftRequest = {
-  user_id: "",
-  num_candidates: "",
-  source_page: "ST_Upsale",
-  current_time: "",
-  context_item_ids: null,
-};
+export function RequestForm({ onSubmit, submitting }: Props) {
+  const [draft, setDraft] = useState<Draft>(readDraft);
+  const [errors, setErrors] = useState<FieldError[]>([]);
 
-type PersistedDraft = Omit<DraftRequest, "current_time">;
-
-function loadPersisted(): Partial<DraftRequest> {
-  if (typeof window === "undefined") return {};
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw) as Partial<PersistedDraft>;
-    const draft: Partial<DraftRequest> = {};
-    if (typeof parsed.user_id === "number" || parsed.user_id === "") {
-      draft.user_id = parsed.user_id;
-    }
-    if (typeof parsed.num_candidates === "number" || parsed.num_candidates === "") {
-      draft.num_candidates = parsed.num_candidates;
-    }
-    if (
-      typeof parsed.source_page === "string" &&
-      (SOURCE_TYPES as readonly string[]).includes(parsed.source_page)
-    ) {
-      draft.source_page = parsed.source_page as SourceType;
-    }
-    if (Array.isArray(parsed.context_item_ids) || parsed.context_item_ids === null) {
-      draft.context_item_ids = parsed.context_item_ids ?? null;
-    }
-    return draft;
-  } catch {
-    return {};
-  }
-}
-
-function persist(draft: DraftRequest) {
-  if (typeof window === "undefined") return;
-  try {
-    const persisted: PersistedDraft = {
-      user_id: draft.user_id,
-      num_candidates: draft.num_candidates,
-      source_page: draft.source_page,
-      context_item_ids: draft.context_item_ids,
-    };
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
-  } catch {
-    // ignore quota / serialization errors
-  }
-}
-
-function toDatetimeLocal(iso: string): string {
-  if (!iso) return "";
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return "";
-  const pad = (value: number) => String(value).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(
-    date.getDate()
-  )}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
-
-export function RequestForm({ onSubmit, submitting, catalogReady }: Props) {
-  const [draft, setDraft] = useState<DraftRequest>(() => ({
-    ...DEFAULT_DRAFT,
-    ...loadPersisted(),
-  }));
-  const [contextInput, setContextInput] = useState<string>(() =>
-    (draft.context_item_ids ?? []).join(", ")
-  );
-
-  useEffect(() => {
-    persist(draft);
-  }, [draft]);
-
-  const datetimeLocal = useMemo(
-    () => toDatetimeLocal(draft.current_time),
-    [draft.current_time]
-  );
-
-  const update = <K extends keyof DraftRequest>(key: K, value: DraftRequest[K]) => {
+  const update = <K extends keyof Draft>(key: K, value: Draft[K]) => {
     setDraft((prev) => ({ ...prev, [key]: value }));
   };
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    onSubmit(draft);
+    const result = toRequest(draft);
+    if (Array.isArray(result)) {
+      setErrors(result);
+      return;
+    }
+    setErrors([]);
+    saveDraft(draft);
+    onSubmit(result);
   };
 
   const reset = () => {
     setDraft(DEFAULT_DRAFT);
-    setContextInput("");
+    setErrors([]);
+    saveDraft(DEFAULT_DRAFT);
   };
+
+  const contextCount = splitIds(draft.context_item_ids).length;
 
   return (
     <form onSubmit={submit} className="form">
       <label>
         User ID
         <input
-          type="number"
+          inputMode="numeric"
           value={draft.user_id}
-          onChange={(event) => {
-            const value = event.target.value;
-            if (value === "") {
-              update("user_id", "");
-              return;
-            }
-            const parsed = Number(value);
-            update("user_id", Number.isNaN(parsed) ? "" : parsed);
-          }}
-          min={1}
+          onChange={(event) => update("user_id", event.target.value)}
           placeholder="Required"
           required
         />
@@ -128,24 +52,11 @@ export function RequestForm({ onSubmit, submitting, catalogReady }: Props) {
       <label>
         Context item IDs
         <input
-          type="text"
-          value={contextInput}
-          onChange={(event) => {
-            const raw = event.target.value;
-            setContextInput(raw);
-            const ids = raw
-              .split(",")
-              .map((value) => value.trim())
-              .filter(Boolean)
-              .map((value) => Number(value))
-              .filter((value) => Number.isFinite(value) && value > 0);
-            update("context_item_ids", ids.length ? ids : null);
-          }}
+          value={draft.context_item_ids}
+          onChange={(event) => update("context_item_ids", event.target.value)}
           placeholder="Comma-separated (optional)"
         />
-        {draft.context_item_ids && draft.context_item_ids.length > 0 ? (
-          <span className="hint">{draft.context_item_ids.length} parsed</span>
-        ) : null}
+        {contextCount > 0 ? <span className="hint">{contextCount} IDs</span> : null}
       </label>
 
       <label>
@@ -153,17 +64,8 @@ export function RequestForm({ onSubmit, submitting, catalogReady }: Props) {
         <input
           type="number"
           value={draft.num_candidates}
-          onChange={(event) => {
-            const value = event.target.value;
-            if (value === "") {
-              update("num_candidates", "");
-              return;
-            }
-            const parsed = Number(value);
-            update("num_candidates", Number.isNaN(parsed) ? "" : parsed);
-          }}
+          onChange={(event) => update("num_candidates", event.target.value)}
           min={1}
-          placeholder="e.g. 10"
           required
         />
       </label>
@@ -186,28 +88,21 @@ export function RequestForm({ onSubmit, submitting, catalogReady }: Props) {
         Current time
         <input
           type="datetime-local"
-          value={datetimeLocal}
-          onChange={(event) =>
-            update(
-              "current_time",
-              event.target.value ? new Date(event.target.value).toISOString() : ""
-            )
-          }
+          value={draft.current_time}
+          onChange={(event) => update("current_time", event.target.value)}
         />
-        <span className="hint">Leave empty to use server's current time</span>
+        <span className="hint">Local time, sent as UTC. Empty: server time</span>
       </label>
 
       <div className="actions">
-        <button type="submit" disabled={submitting || !catalogReady}>
+        <button type="submit" disabled={submitting}>
           {submitting ? "Fetching..." : "Fetch recommendations"}
         </button>
         <button type="button" className="ghost" onClick={reset} disabled={submitting}>
           Reset
         </button>
       </div>
-      {!catalogReady ? (
-        <span className="hint">Waiting for catalog to load…</span>
-      ) : null}
+      {errors.length > 0 ? <ErrorBanner title="Invalid request" details={errors} /> : null}
     </form>
   );
 }

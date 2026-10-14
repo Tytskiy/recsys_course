@@ -1,17 +1,14 @@
-import { api } from "./api";
+import { ApiError, apiBase } from "./api";
 import { ErrorBanner } from "./components/ErrorBanner";
-import { RawResponse } from "./components/RawResponse";
 import { RequestForm } from "./components/RequestForm";
 import { ResultsList } from "./components/ResultsList";
 import { useCatalog } from "./hooks/useCatalog";
 import { useRecommend } from "./hooks/useRecommend";
 
 export default function App() {
-  const { catalog, status: catalogStatus } = useCatalog();
-  const recommend = useRecommend(catalog);
-
-  const submitting =
-    recommend.status === "loading" || recommend.status === "loading-more";
+  const catalog = useCatalog();
+  const recommend = useRecommend();
+  const { error } = recommend;
 
   return (
     <div className="app">
@@ -23,32 +20,34 @@ export default function App() {
             Tune request params, call the API, and browse top items with images.
           </p>
         </div>
-        <div className="chip">API: {api.apiBase || "(proxied)"}</div>
+        <div className="chip">API: {apiBase || "(proxied)"}</div>
       </header>
 
       <main className="layout">
         <section className="panel form-panel">
           <RequestForm
             onSubmit={recommend.submit}
-            submitting={submitting}
-            catalogReady={catalogStatus === "success"}
+            submitting={recommend.status === "loading" || recommend.status === "loading-more"}
           />
-          {recommend.status === "error" ? (
-            <ErrorBanner error={recommend.error} />
+          {recommend.status === "error" && error ? (
+            <ErrorBanner
+              title={error.message}
+              details={error instanceof ApiError ? error.details : []}
+            />
           ) : null}
         </section>
 
         <section className="panel results-panel">
           <ResultsList
-            items={recommend.items}
-            catalogSize={catalog.size}
-            catalogStatus={catalogStatus}
+            {...catalog}
+            pages={recommend.pages}
+            lastRequest={recommend.lastRequest}
+            nextPageToken={recommend.nextPageToken}
+            rawResponse={recommend.rawResponse}
             latencyMs={recommend.latencyMs}
-            canLoadMore={recommend.canLoadMore}
             loadingMore={recommend.status === "loading-more"}
             onLoadMore={recommend.loadMore}
           />
-          <RawResponse data={recommend.rawResponse} />
         </section>
       </main>
     </div>

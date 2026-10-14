@@ -93,7 +93,6 @@ label {
 }
 
 input,
-textarea,
 select {
   width: 100%;
   border-radius: var(--radius-sm);
@@ -117,17 +116,6 @@ select {
   color: var(--muted);
   font-size: 0.75rem;
   font-family: "Space Mono", monospace;
-}
-
-textarea {
-  min-height: 70px;
-  resize: vertical;
-}
-
-.toggle {
-  display: flex;
-  align-items: center;
-  gap: 10px;
 }
 
 button {
@@ -216,6 +204,11 @@ button.ghost:hover:not(:disabled) {
   display: flex;
   gap: 24px;
   flex-wrap: wrap;
+  align-items: center;
+}
+
+.summary button {
+  margin-left: auto;
 }
 
 .summary .label {
@@ -234,6 +227,8 @@ button.ghost:hover:not(:disabled) {
 }
 
 .card {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 360px;
   background: #fff;
   border-radius: var(--radius-lg);
   overflow: hidden;
@@ -273,10 +268,16 @@ button.ghost:hover:not(:disabled) {
   font-size: 0.75rem;
 }
 
-.badge {
+.badges {
   position: absolute;
   top: 10px;
   right: 10px;
+  display: grid;
+  gap: 6px;
+  justify-items: end;
+}
+
+.badge {
   padding: 4px 10px;
   border-radius: 999px;
   font-family: "Space Mono", monospace;
@@ -287,6 +288,11 @@ button.ghost:hover:not(:disabled) {
 
 .badge.missing {
   background: #a3121a;
+  color: #fff;
+}
+
+.badge.repeat {
+  background: var(--accent-2);
   color: #fff;
 }
 

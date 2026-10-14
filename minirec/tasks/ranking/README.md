@@ -4,16 +4,16 @@ In the third week you will close the loop of learned ranking: the engine logs ca
 
 ## Common theme: point-in-time
 Everything the model sees must be known at request time, and everything it learns from must happen after it.
-- Features strictly before the request. The replay in `build_ranker.py` builds the snapshot for the requests of day `D` from days `< D`. It used to include day `D`, and the `item:*`/`user:*` counters already contained the very add-to-carts and purchases that later became labels; the NDCG@10 ≈ 0.9 of earlier versions of the assignment was inflated by exactly this.
+- Features strictly before the request. The replay in `build_ranker.py` builds the snapshot for the requests of day `D` from days `< D`. If it included day `D`, the `item:*`/`user:*` counters would already contain the very add-to-carts and purchases that later become labels.
 - Labels strictly after the request, within the `window_size` window (forward `join_asof`, task `build_pool`).
 - Train/test split by time, not at random (`build_pool`).
 - Positions are also "from the past": clicks at the top of the list are partly explained by the position, not by relevance. The click model (`build_pool`) accounts for this explicitly. `mixer_position` and `position` are logged, but must not be model features.
 
 ## Tasks
 1. [`candidate_logger`](./candidate_logger/README.md) - two-level candidate logging, including `num_served`. This is the input data for all the following tasks.
-2. [`build_pool`](./build_pool/README.md) - JSONL logs → point-in-time labelling → dataset → split by time, plus the positional click model (EM) and IPW weights for positives.
+2. [`build_pool`](./build_pool/README.md) - JSONL logs → point-in-time labeling → dataset → split by time, plus the positional click model (EM) and IPW weights for positives.
 3. [`model_ranker`](./model_ranker/README.md) - the trained model in the runtime via `ModelWrapper` and `factor_schema`.
-4. [`mixigen`](./mixigen/README.md) (bonus) - a contextual candidate mixer: a model prescores `(CG, position)` slots and sets quotas for each CG.
+4. [`mixigen`](./mixigen/README.md) (optional) - a contextual candidate mixer: a model prescores `(CG, position)` slots and sets quotas for each CG.
 
 The recommended order is 1 → 2; tasks 3 and 4 are independent. The tasks' tests do not depend on each other: where someone else's functionality is needed, the tests use their own stubs and the seeded simulator [`engine_builder/tests/ranking/sim.py`](../../engine_builder/tests/ranking/sim.py).
 

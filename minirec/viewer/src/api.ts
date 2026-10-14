@@ -1,79 +1,95 @@
-import type { FastAPIDetail, RecommendRequest, RecommendResponse } from "./types";
+import type { FieldError, RecommendRequest, RecommendResponse } from "./types";
 
 export class ApiError extends Error {
-  status: number;
-  details: FastAPIDetail[] | null;
+  details: FieldError[];
 
-  constructor(message: string, status: number, details: FastAPIDetail[] | null) {
+  constructor(message: string, details: FieldError[] = []) {
     super(message);
     this.name = "ApiError";
-    this.status = status;
     this.details = details;
   }
 }
 
-const apiBase = import.meta.env.VITE_API_BASE ?? "";
+export const apiBase = import.meta.env.VITE_API_BASE ?? "";
 
-function isFastAPIErrorBody(body: unknown): body is { detail: FastAPIDetail[] } {
-  if (!body || typeof body !== "object") return false;
-  const detail = (body as { detail?: unknown }).detail;
-  if (!Array.isArray(detail)) return false;
-  return detail.every(
-    (d) =>
-      d &&
-      typeof d === "object" &&
-      Array.isArray((d as FastAPIDetail).loc) &&
-      typeof (d as FastAPIDetail).msg === "string"
+const JSON_TOKEN = /"(?:[^"\\]|\\.)*"|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/g;
+const INTEGER = /^-?\d+$/;
+
+export function parseJson(text: string): unknown {
+  return JSON.parse(
+    text.replace(JSON_TOKEN, (token) => (INTEGER.test(token) ? `"${token}"` : token))
   );
 }
 
-async function postJson<T>(
-  path: string,
-  body: unknown,
-  signal?: AbortSignal
-): Promise<T> {
-  const response = await fetch(`${apiBase}${path}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-    signal,
-  });
-
-  if (!response.ok) {
-    let parsed: unknown = null;
-    const text = await response.text();
-    if (text) {
-      try {
-        parsed = JSON.parse(text);
-      } catch {
-        // not JSON, fall through
-      }
-    }
-    if (isFastAPIErrorBody(parsed)) {
-      throw new ApiError(
-        `Validation failed (HTTP ${response.status})`,
-        response.status,
-        parsed.detail
-      );
-    }
-    if (parsed && typeof parsed === "object" && "detail" in parsed) {
-      const detail = (parsed as { detail: unknown }).detail;
-      if (typeof detail === "string") {
-        throw new ApiError(detail, response.status, null);
-      }
-    }
-    throw new ApiError(
-      text || `HTTP ${response.status}`,
-      response.status,
-      null
-    );
-  }
-
-  return response.json() as Promise<T>;
+export function encodeRequest(request: RecommendRequest): string {
+  const { user_id, context_item_ids, ...rest } = request;
+  const ids = context_item_ids ? `[${context_item_ids.join(",")}]` : "null";
+  return `{"user_id":${user_id},"context_item_ids":${ids},${JSON.stringify(rest).slice(1)}`;
 }
 
-export const api = {
-  recommend: (payload: RecommendRequest, signal?: AbortSignal) =>
-    postJson<RecommendResponse>("/recommend", payload, signal),
-  apiBase,
-};
+export function toCurl(request: RecommendRequest): string {
+  const url = new URL(`${apiBase}/recommend`, window.location.href).href;
+  return `curl -sS -X POST '${url}' -H 'Content-Type: application/json' -d '${encodeRequest(request)}'`;
+}
+
+function tryParseJson(text: string): unknown {
+  try {
+    return parseJson(text);
+  } catch {
+    return undefined;
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function errorFromBody(status: number, text: string): ApiError {
+  const body = tryParseJson(text);
+  const detail = isRecord(body) ? body.detail : undefined;
+  if (Array.isArray(detail)) {
+    const details = detail.filter(isRecord).map((d) => ({
+      field: (Array.isArray(d.loc) ? d.loc.filter((part) => part !== "body").join(".") : "") || "request",
+      msg: String(d.msg),
+    }));
+    return new ApiError(`Validation failed (HTTP ${status})`, details);
+  }
+  const reason = typeof detail === "string" ? detail : text;
+  return new ApiError(reason ? `HTTP ${status}: ${reason}` : `HTTP ${status}`);
+}
+
+function isRecommendResponse(body: unknown): body is RecommendResponse {
+  return (
+    isRecord(body) &&
+    Array.isArray(body.candidates) &&
+    body.candidates.every((id) => typeof id === "string") &&
+    typeof body.next_page_token === "string"
+  );
+}
+
+export async function recommend(
+  request: RecommendRequest,
+  signal: AbortSignal
+): Promise<{ response: RecommendResponse; text: string }> {
+  let res: Response;
+  try {
+    res = await fetch(`${apiBase}/recommend`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: encodeRequest(request),
+      signal,
+    });
+  } catch (err) {
+    if (signal.aborted) throw err;
+    throw new ApiError(`Network error: ${err instanceof Error ? err.message : String(err)}`);
+  }
+  const text = await res.text();
+  if (!res.ok) throw errorFromBody(res.status, text);
+  const body = tryParseJson(text);
+  if (!isRecommendResponse(body)) {
+    throw new ApiError(
+      `HTTP ${res.status}: expected {candidates: int[], next_page_token: str}, got ${text.slice(0, 200)}`
+    );
+  }
+  return { response: body, text };
+}

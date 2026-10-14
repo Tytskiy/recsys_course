@@ -1,43 +1,37 @@
 import { useEffect, useState } from "react";
-import type { ItemMetadata } from "../types";
+import { parseJson } from "../api";
+import type { Id, ItemMetadata } from "../types";
 
-export type CatalogStatus = "idle" | "loading" | "error" | "success";
+type CatalogStatus = "loading" | "error" | "success";
 
 export type CatalogState = {
-  catalog: Map<number, ItemMetadata>;
+  catalog: Map<Id, ItemMetadata>;
   status: CatalogStatus;
 };
 
 export function useCatalog(): CatalogState {
-  const [catalog, setCatalog] = useState<Map<number, ItemMetadata>>(new Map());
-  const [status, setStatus] = useState<CatalogStatus>("idle");
+  const [state, setState] = useState<CatalogState>({ catalog: new Map(), status: "loading" });
 
   useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      setStatus("loading");
-      try {
-        const response = await fetch("/catalog.json");
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
-        }
-        const data = (await response.json()) as ItemMetadata[];
-        if (cancelled) return;
-        const next = new Map<number, ItemMetadata>();
-        for (const item of data) {
-          next.set(item.item_id, item);
-        }
-        setCatalog(next);
-        setStatus("success");
-      } catch {
-        if (!cancelled) setStatus("error");
-      }
-    };
-    load();
-    return () => {
-      cancelled = true;
-    };
+    const controller = new AbortController();
+    fetch("/catalog.json", { signal: controller.signal })
+      .then((response) => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response.text();
+      })
+      .then((text) => {
+        if (controller.signal.aborted) return;
+        const items = parseJson(text) as ItemMetadata[];
+        setState({
+          catalog: new Map(items.map((item) => [item.item_id, item])),
+          status: "success",
+        });
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setState((prev) => ({ ...prev, status: "error" }));
+      });
+    return () => controller.abort();
   }, []);
 
-  return { catalog, status };
+  return state;
 }

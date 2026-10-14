@@ -24,13 +24,11 @@ Click model:
 - `estimate_pbm(counts, max_pos, n_iter)`: exactly `n_iter` EM iterations starting from `theta = gamma = 0.5`; on each, first record the log-likelihood of the current parameters, then the E-step and the M-step (both updates from one E-step). Return `theta / theta[0]`, normalizing once, after the last iteration. A row without non-clicks (`clicks == impressions`) contributes nothing to the non-click terms, even if `theta * gamma == 1`. The formulas are in the docstring.
 - `ipw_weights(df, theta, clip)`: for a positive at position `p` the weight is `min(1 / theta[min(p, len(theta)) - 1], clip)`; for negatives and for positives without a position, 1.0.
 
-New compared to last year: log rows carry `position`/`served` (the log record contains `num_served`), `PoolBuilder` got `default_feature_value` (`build_cbm_pool` uses it to fill missing values the same way `ModelRanker` does at runtime), the join keeps `label_position`/`label_source_type`, and the time-based split and the click model are now written by you.
-
 ## Tips
 - The ready `Pool` is the input of the `train_catboost` function; the full pipeline is in [`engine_builder/build_ranker.py`](../../../engine_builder/build_ranker.py): it estimates `theta` separately for each surface (`source_type`) on the training window, weights the positives and prints the `theta` curves next to the naive CTR. On the full data the search curve is steep (`theta` at the 10th position is about 0.15) and the catalog curve is flat (about 0.67), so surfaces must not be mixed.
 - `theta` here is the probability of examination given that the impression was logged as `AT_View`, not a "real" look by the user.
 - IPW improves calibration (the estimate of the click probability), not necessarily the order: if the old ranker already sorted by relevance, the position effect does not spoil the order, and the weights only add variance. The tests check calibration.
-- The NDCG@10 reference value for the `TopPop + History` configuration on a monthly window is being recomputed: the previous value ≈ 0.9 was obtained on a replay where the daily snapshot included actions of the same day (label leakage into the counters), and is inflated. If the model does not beat the original candidate order, most likely `build_dataset` loses positives, or join-asof finds no actions inside the window.
+- If the model does not beat the original candidate order, most likely `build_dataset` loses positives, or join-asof finds no actions inside the window.
 - The click model tests use the seeded simulator [`engine_builder/tests/ranking/sim.py`](../../../engine_builder/tests/ranking/sim.py) with a known `theta`.
 
 ## How to check yourself

@@ -9,7 +9,7 @@ Mixigen solves this problem: instead of fixed quotas, it prescores slots, i.e. `
 3. Take the top-K slots by descending score, where `K = total_candidates`. For each CG, the quota is the maximum selected position + 1.
 4. Request the quotas from each CG, deduplicate by `item_id` and set `factors["source_cg"]` to track the source of a candidate in the logs and at runtime.
 
-You can see how to train such a model in last year's bonus task [yandexdataschool/recsys_course/week03_candgen](https://github.com/yandexdataschool/recsys_course/blob/main/week03_candgen/homework/homework.ipynb). Training the Mixigen model itself is not part of the assignment: it is a separate pipeline.
+You can see how to train such a model in the homework [yandexdataschool/recsys_course/week03_candgen](https://github.com/yandexdataschool/recsys_course/blob/main/week03_candgen/homework/homework.ipynb). Training the Mixigen model itself is not part of the assignment: it is a separate pipeline.
 
 ## Statement
 Implement three methods of `MixigenCandidateMixer` in [`engine/src/engine/cg/mixing.py`](../../../engine/src/engine/cg/mixing.py).

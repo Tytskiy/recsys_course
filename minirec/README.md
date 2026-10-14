@@ -22,7 +22,7 @@ The framework consists of several Python modules, and you will develop different
 
 Some parts are already done for you:
 - `engine_downloader` — a sidecar service that downloads the current data snapshot for the microservice from S3 into the shared volume of the service container.
-- `viewer` — a web service for viewing and analysing the recommendations on Yandex Lavka data.
+- `viewer` — a web service for viewing and analyzing the recommendations on Yandex Lavka data.
 
 
 Schematically, the dependencies are connected like this.

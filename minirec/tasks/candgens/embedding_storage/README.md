@@ -8,7 +8,7 @@ The embedding storage is responsible for storing and working with embeddings: ge
 GPU indexes are appearing now too, but that is out of scope for this task :)
 
 ## Statement
-Implement the `EmbeddingStorage` protocol with the Qdrant vector DB client in [`engine/storages/embedding_storage.py`](../../../engine/src/engine/storages/embedding_storage.py). You need the protocol methods, but you are free to create any additional ones you need; for example, `__init__` will come in handy. You can find the exact implementation requirements (the expected behaviour of the methods) in the tests.
+Implement the `EmbeddingStorage` protocol with the Qdrant vector DB client in [`engine/storages/embedding_storage.py`](../../../engine/src/engine/storages/embedding_storage.py). You need the protocol methods, but you are free to create any additional ones you need; for example, `__init__` will come in handy. You can find the exact implementation requirements (the expected behavior of the methods) in the tests.
 
 ## Tips
 - The `search` and `get` methods simply wrap the corresponding client methods and convert the arguments / results.

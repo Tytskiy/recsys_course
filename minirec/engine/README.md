@@ -13,7 +13,7 @@ The main entity in this framework is `Recommender`, a protocol that can recommen
 There are also several auxiliary protocols that let the recommender get information from other systems or files while processing a request:
 - `ExperimentManager`: gets, from the context, the parameters for building the feed for the given user, for example the list of candidate generators or the number of candidates for each of them, whether to filter out the user's history, and so on.
 - `EmbeddingStorage`: performs operations on user or item embeddings by their identifier: approximate or exact search, getting embeddings or computing distances between items and a user / an anchor item.
-- `FeatureStorage`: gets the features of a user or an item by its identifier from a key-value storage, for example computed statistics, embeddings, lists (the user's history, favourite categories) and more.
+- `FeatureStorage`: gets the features of a user or an item by its identifier from a key-value storage, for example computed statistics, embeddings, lists (the user's history, favorite categories) and more.
 
 For all the protocols above, one or more implementations with different algorithms are provided, together with tests for them. The framework also describes one implementation of the recommender.
 

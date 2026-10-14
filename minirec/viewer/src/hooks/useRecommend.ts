@@ -1,182 +1,76 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, ApiError } from "../api";
-import type {
-  DraftRequest,
-  ItemMetadata,
-  RecommendRequest,
-  RecommendResponse,
-  ResultItem,
-} from "../types";
+import { recommend } from "../api";
+import type { Id, RecommendRequest } from "../types";
 
-export type RecommendStatus = "idle" | "loading" | "loading-more" | "error" | "success";
+type RecommendStatus = "idle" | "loading" | "loading-more" | "error" | "success";
 
-export type RecommendState = {
+type RecommendState = {
   status: RecommendStatus;
-  error: ApiError | Error | null;
-  items: ResultItem[];
-  rawResponse: object | null;
-  nextPageToken: string;
+  error: Error | null;
+  pages: Id[][];
+  firstRequest: RecommendRequest | null;
+  lastRequest: RecommendRequest | null;
+  nextPageToken: string | null;
+  rawResponse: string | null;
   latencyMs: number | null;
-  canLoadMore: boolean;
 };
 
-export type RecommendActions = {
-  submit: (draft: DraftRequest) => Promise<void>;
-  loadMore: () => Promise<void>;
+const INITIAL: RecommendState = {
+  status: "idle",
+  error: null,
+  pages: [],
+  firstRequest: null,
+  lastRequest: null,
+  nextPageToken: null,
+  rawResponse: null,
+  latencyMs: null,
 };
 
-type ValidatedPayload = {
-  payload: RecommendRequest;
-  numCandidates: number;
-};
-
-function validate(draft: DraftRequest): ValidatedPayload {
-  const userId =
-    typeof draft.user_id === "number" && Number.isInteger(draft.user_id)
-      ? draft.user_id
-      : null;
-  if (userId === null || userId < 1) {
-    throw new Error("User ID must be a positive integer.");
-  }
-  const numCandidates =
-    typeof draft.num_candidates === "number" && Number.isInteger(draft.num_candidates)
-      ? draft.num_candidates
-      : null;
-  if (numCandidates === null || numCandidates < 1) {
-    throw new Error("Num candidates must be a positive integer.");
-  }
-  const payload: RecommendRequest = {
-    user_id: userId,
-    num_candidates: numCandidates,
-    source_page: draft.source_page,
-    current_time: draft.current_time || null,
-    context_item_ids: draft.context_item_ids,
-  };
-  return { payload, numCandidates };
-}
-
-function mapCandidates(
-  candidates: number[],
-  catalog: Map<number, ItemMetadata>
-): ResultItem[] {
-  return candidates.map((itemId) => {
-    const found = catalog.get(itemId);
-    if (found) {
-      return { item: found, inCatalog: true };
-    }
-    return {
-      item: { item_id: itemId, title: null, description: null, image_url: null },
-      inCatalog: false,
-    };
-  });
-}
-
-function stripToken(response: RecommendResponse): object {
-  const { next_page_token: _t, ...rest } = response;
-  return rest;
-}
-
-export function useRecommend(catalog: Map<number, ItemMetadata>): RecommendState & RecommendActions {
-  const [status, setStatus] = useState<RecommendStatus>("idle");
-  const [error, setError] = useState<ApiError | Error | null>(null);
-  const [items, setItems] = useState<ResultItem[]>([]);
-  const [rawResponse, setRawResponse] = useState<object | null>(null);
-  const [nextPageToken, setNextPageToken] = useState<string>("");
-  const [latencyMs, setLatencyMs] = useState<number | null>(null);
-  const [canLoadMore, setCanLoadMore] = useState<boolean>(false);
-
+export function useRecommend() {
+  const [state, setState] = useState<RecommendState>(INITIAL);
   const abortRef = useRef<AbortController | null>(null);
-  const lastPayloadRef = useRef<RecommendRequest | null>(null);
-  const lastNumCandidatesRef = useRef<number>(0);
 
-  useEffect(() => {
-    return () => {
-      abortRef.current?.abort();
-    };
+  useEffect(() => () => abortRef.current?.abort(), []);
+
+  const run = useCallback(async (request: RecommendRequest, append: boolean) => {
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setState((prev) =>
+      append
+        ? { ...prev, status: "loading-more", error: null, lastRequest: request }
+        : { ...INITIAL, status: "loading", firstRequest: request, lastRequest: request }
+    );
+
+    const startedAt = performance.now();
+    try {
+      const { response, text } = await recommend(request, controller.signal);
+      if (controller.signal.aborted) return;
+      const latencyMs = performance.now() - startedAt;
+      setState((prev) => ({
+        ...prev,
+        status: "success",
+        pages: [...prev.pages, response.candidates],
+        nextPageToken: response.next_page_token,
+        rawResponse: text,
+        latencyMs,
+      }));
+    } catch (err) {
+      if (controller.signal.aborted) return;
+      setState((prev) => ({
+        ...prev,
+        status: "error",
+        error: err instanceof Error ? err : new Error(String(err)),
+      }));
+    }
   }, []);
 
-  const runRequest = useCallback(
-    async (
-      payload: RecommendRequest,
-      mode: "submit" | "more",
-      numCandidates: number
-    ) => {
-      abortRef.current?.abort();
-      const controller = new AbortController();
-      abortRef.current = controller;
+  const submit = useCallback((request: RecommendRequest) => run(request, false), [run]);
 
-      setStatus(mode === "submit" ? "loading" : "loading-more");
-      setError(null);
-      if (mode === "submit") {
-        setItems([]);
-        setRawResponse(null);
-        setLatencyMs(null);
-        setCanLoadMore(false);
-      }
+  const { firstRequest, nextPageToken } = state;
+  const loadMore = useCallback(() => {
+    if (firstRequest && nextPageToken) run({ ...firstRequest, page_token: nextPageToken }, true);
+  }, [firstRequest, nextPageToken, run]);
 
-      const startedAt = performance.now();
-      try {
-        const response = await api.recommend(payload, controller.signal);
-        if (controller.signal.aborted) return;
-
-        const elapsed = performance.now() - startedAt;
-        const mapped = mapCandidates(response.candidates, catalog);
-
-        setLatencyMs(elapsed);
-        setRawResponse(stripToken(response));
-        setNextPageToken(response.next_page_token ?? "");
-        setCanLoadMore(
-          Boolean(response.next_page_token) &&
-            response.candidates.length === numCandidates
-        );
-        setItems((prev) => (mode === "submit" ? mapped : [...prev, ...mapped]));
-        setStatus("success");
-      } catch (err) {
-        if ((err as Error)?.name === "AbortError") return;
-        setStatus("error");
-        setError(err instanceof Error ? err : new Error("Unexpected error"));
-      }
-    },
-    [catalog]
-  );
-
-  const submit = useCallback(
-    async (draft: DraftRequest) => {
-      let validated: ValidatedPayload;
-      try {
-        validated = validate(draft);
-      } catch (err) {
-        setStatus("error");
-        setError(err instanceof Error ? err : new Error("Invalid input"));
-        setItems([]);
-        setRawResponse(null);
-        setLatencyMs(null);
-        setCanLoadMore(false);
-        return;
-      }
-      lastPayloadRef.current = validated.payload;
-      lastNumCandidatesRef.current = validated.numCandidates;
-      await runRequest(validated.payload, "submit", validated.numCandidates);
-    },
-    [runRequest]
-  );
-
-  const loadMore = useCallback(async () => {
-    const base = lastPayloadRef.current;
-    if (!base || !nextPageToken) return;
-    const payload: RecommendRequest = { ...base, page_token: nextPageToken };
-    await runRequest(payload, "more", lastNumCandidatesRef.current);
-  }, [nextPageToken, runRequest]);
-
-  return {
-    status,
-    error,
-    items,
-    rawResponse,
-    nextPageToken,
-    latencyMs,
-    canLoadMore,
-    submit,
-    loadMore,
-  };
+  return { ...state, submit, loadMore };
 }
