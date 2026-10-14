@@ -1,0 +1,130 @@
+name: rec-engine
+
+services:
+  # In-memory S3 (moto server): buckets and objects are lost when the container
+  # stops, so rerun engine_builder after `docker compose down`.
+  s3:
+    image: motoserver/moto:5.2.3
+    container_name: s3
+    ports:
+      - "9002:5000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/moto-api/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: qdrant
+    ports:
+      - "6333:6333"  # HTTP API
+      - "6334:6334"  # gRPC API
+    volumes:
+      - ~/qdrant/storage:/qdrant/storage
+
+  valkey:
+    image: valkey/valkey:latest
+    container_name: valkey
+    ports:
+      - "6379:6379"
+    volumes:
+      - ~/valkey/data:/data
+    command: valkey-server --save 60 1 --loglevel warning
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  storages:
+    image: busybox:latest
+    container_name: storages
+    command: ["sh", "-c", "sleep infinity"]
+    depends_on:
+      - s3
+      - qdrant
+      - valkey
+
+  s3-setup:
+    image: amazon/aws-cli:2.22.29
+    container_name: s3-setup
+    entrypoint: /bin/sh
+    command:
+      - -c
+      - >
+        aws --endpoint-url http://s3:5000
+        s3api create-bucket --bucket rec-engine || true
+    environment:
+      AWS_ACCESS_KEY_ID: admin
+      AWS_SECRET_ACCESS_KEY: password
+      AWS_DEFAULT_REGION: us-east-1
+    depends_on:
+      s3:
+        condition: service_healthy
+
+  experiments_server:
+    build:
+      context: .
+      dockerfile: experiments_server/Dockerfile
+    environment:
+      EXPERIMENT_SQLITE_PATH: /data/experiments.db
+    volumes:
+      - experiment_data:/data
+    ports:
+      - "8010:8010"
+
+  engine-server:
+    build:
+      context: .
+      dockerfile: engine_server/Dockerfile
+    restart: unless-stopped
+    environment:
+      REC_ENGINE_CONFIG_PATH: /app/engine_server/config.yaml
+      REC_ENGINE_LOCAL_ARCHIVE_PATH: /shared/archive.tar.gz
+      REC_ENGINE_UPDATE_MARKER_PATH: /shared/archive.version.json
+      EXPERIMENT_SERVICE_URL: http://experiments_server:8010
+      QDRANT_HOST: qdrant
+      QDRANT_HTTP_PORT: 6333
+      VALKEY_HOST: valkey
+      VALKEY_PORT: 6379
+    volumes:
+      - model_data:/shared
+      - ./engine_server/config.yaml:/app/engine_server/config.yaml:ro
+      - engine_logs:/logs
+    ports:
+      - "8000:8000"
+
+  engine-downloader:
+    build:
+      context: .
+      dockerfile: engine_downloader/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      s3:
+        condition: service_healthy
+      s3-setup:
+        condition: service_started
+    environment:
+      AWS_ENDPOINT_URL: http://s3:5000
+      AWS_ACCESS_KEY_ID: admin
+      AWS_SECRET_ACCESS_KEY: password
+      REC_ENGINE_ARCHIVE_S3_PATH: s3://rec-engine/service/v1/archive.tar.gz
+      REC_ENGINE_LOCAL_ARCHIVE_PATH: /shared/archive.tar.gz
+      REC_ENGINE_UPDATE_MARKER_PATH: /shared/archive.version.json
+    volumes:
+      - model_data:/shared
+
+  viewer:
+    build:
+      context: ./viewer
+      dockerfile: Dockerfile
+    environment:
+      VITE_API_PROXY: http://engine-server:8000
+    ports:
+      - "5173:5173"
+
+volumes:
+  experiment_data:
+  model_data:
+  engine_logs:

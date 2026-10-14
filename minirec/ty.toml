@@ -1,0 +1,10 @@
+[src]
+# Virtualenvs are not source: without this, `ty` walks .venv and reports
+# third-party diagnostics that drown out the repo's own.
+exclude = [
+    "**/.venv",
+    "**/node_modules",
+]
+
+[rules]
+possibly-missing-attribute = "ignore"

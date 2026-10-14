@@ -1,0 +1,13 @@
+[
+  ["item:num_views", false],
+  ["item:num_clicks", false],
+  ["item:num_cart_updates", false],
+  ["item:num_views_30d", false],
+  ["item:num_clicks_30d", false],
+  ["item:num_cart_updates_30d", false],
+  ["item:num_views_7d", false],
+  ["item:num_clicks_7d", false],
+  ["item:num_cart_updates_7d", false],
+  ["item:cart_update_turn_rate", false],
+  ["item:cart_update_turn_rate_30d", false]
+]

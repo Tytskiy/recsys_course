@@ -1,0 +1,47 @@
+num_features:
+  - "item:num_views"
+  - "item:num_clicks"
+  - "item:num_cart_updates"
+  - "item:num_views_30d"
+  - "item:num_clicks_30d"
+  - "item:num_cart_updates_30d"
+  - "item:num_views_7d"
+  - "item:num_clicks_7d"
+  - "item:num_cart_updates_7d"
+  - "item:cart_update_turn_rate"
+  - "item:cart_update_turn_rate_30d"
+  - "user:num_views"
+  - "user:num_clicks"
+  - "user:num_cart_updates"
+  - "user:num_views_30d"
+  - "user:num_clicks_30d"
+  - "user:num_cart_updates_30d"
+  - "user:num_views_7d"
+  - "user:num_clicks_7d"
+  - "user:num_cart_updates_7d"
+  - "user:cart_update_turn_rate"
+  - "user:cart_update_turn_rate_30d"
+positive_actions:
+  - "AT_CartUpdate"
+  - "AT_Purchase"
+negative_actions:
+  - "AT_View"
+window_size: 1800
+context_features:
+  - "user:num_views"
+  - "user:num_clicks"
+  - "user:num_cart_updates"
+  - "user:num_views_30d"
+  - "user:num_clicks_30d"
+  - "user:num_cart_updates_30d"
+  - "user:num_views_7d"
+  - "user:num_clicks_7d"
+  - "user:num_cart_updates_7d"
+  - "user:cart_update_turn_rate"
+  - "user:cart_update_turn_rate_30d"
+default_feature_value: 0.0
+pbm:
+  max_pos: 20
+  n_iter: 300
+  clip: 10.0
+  min_impressions: 10000
