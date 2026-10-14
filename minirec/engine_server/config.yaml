@@ -1,0 +1,70 @@
+# recommender config for fastapi service
+
+experiment_manager_enabled: false
+
+embedding_storage:
+  name: QdrantEmbeddingStorage
+
+feature_storage:
+  name: ValkeyFeatureStorage
+  readonly: true
+
+runtime_profile: []
+
+candidate_generators:
+  - type: TopPop
+    parameters:
+      path: top_pop.json
+      seed: 42
+  - type: UserToItemKNN
+    parameters:
+      embedding_type: iALS
+  - type: History
+    parameters:
+      action_type: AT_Purchase
+  # - type: SLIMToHistory
+  #   parameters:
+  #     action_type: AT_CartUpdate
+  #     mappings_path: slim_mapping.json
+  #     weights_path: slim_weights.npz
+
+candidate_mixer:
+  type: SchemaCandidateMixer
+  parameters:
+    default_schema:
+      ordered_cgs:
+        - cg_name: iALS_userKNN
+          num_candidates: 25
+        # - cg_name: SLIM_AT_CartUpdate_history
+        #   num_candidates: 25
+        - cg_name: TopPop
+          num_candidates: 25
+        - cg_name: History
+          num_candidates: 25
+      total_candidates: 50
+
+ranking:
+  - type: FeatureReranker
+    parameters:
+      feature_key: item:cart_update_turn_rate
+      descending: true
+      default: -99999
+
+feature_manager:
+  type: SimpleManager
+  parameters:
+    feature_schema:
+      - source_type
+      - iALS_score
+      - item:cart_update_turn_rate
+      - item:cart_update_turn_rate_30d
+      - item:num_cart_updates
+      - item:num_views
+      - item:num_cart_updates_30d
+      - item:num_views_30d
+      - user:cart_update_turn_rate
+      - user:cart_update_turn_rate_30d
+      - user:num_cart_updates
+      - user:num_views
+      - user:num_cart_updates_30d
+      - user:num_views_30d

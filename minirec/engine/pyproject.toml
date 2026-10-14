@@ -1,0 +1,43 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "engine"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = "==3.13.5"
+dependencies = [
+    "boto3>=1.42.5",
+    "catboost>=1.2.8",
+    "httpx>=0.27.2",
+    "loguru>=0.7.3",
+    "numpy>=2.3.2",
+    "orjson>=3.11.2",
+    "pydantic>=2.12.5",
+    "scipy>=1.15.3",
+    "pyyaml>=6.0.2",
+    "qdrant-client>=1.12.1",
+    "rbloom>=1.5.4",
+    "valkey>=6.0.3",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/engine"]
+
+[[tool.uv.index]]
+url = "https://pypi.org/simple"
+default = true
+
+[dependency-groups]
+dev = [
+    "fakeredis[valkey]>=2.32.0",
+    "pytest>=8.4.1",
+    "ty>=0.0.1a19",
+    "pytest-cov>=7.0.0",
+]
+
+# Scope it to the library so the number is not inflated by the tests themselves.
+[tool.coverage.run]
+source = ["src/engine"]

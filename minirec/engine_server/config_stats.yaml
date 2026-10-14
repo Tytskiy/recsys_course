@@ -1,0 +1,67 @@
+# stats-only recommender config (no iALS, no SLIM) for ranker training runs
+
+experiment_manager_enabled: false
+
+embedding_storage:
+  name: QdrantEmbeddingStorage
+
+feature_storage:
+  name: ValkeyFeatureStorage
+  readonly: true
+
+runtime_profile: []
+
+candidate_generators:
+  - type: TopPop
+    parameters:
+      path: top_pop.json
+      seed: 42
+  - type: History
+    parameters:
+      action_type: AT_Purchase
+
+candidate_mixer:
+  type: SchemaCandidateMixer
+  parameters:
+    default_schema:
+      ordered_cgs:
+        - cg_name: TopPop
+          num_candidates: 25
+        - cg_name: History
+          num_candidates: 25
+      total_candidates: 50
+
+ranking:
+  - type: FeatureReranker
+    parameters:
+      feature_key: item:cart_update_turn_rate
+      descending: true
+      default: -99999
+
+feature_manager:
+  type: SimpleManager
+  parameters:
+    feature_schema:
+      - source_type
+      - item:cart_update_turn_rate
+      - item:cart_update_turn_rate_30d
+      - item:num_cart_updates
+      - item:num_views
+      - item:num_clicks
+      - item:num_cart_updates_30d
+      - item:num_views_30d
+      - item:num_clicks_30d
+      - item:num_cart_updates_7d
+      - item:num_views_7d
+      - item:num_clicks_7d
+      - user:cart_update_turn_rate
+      - user:cart_update_turn_rate_30d
+      - user:num_cart_updates
+      - user:num_views
+      - user:num_clicks
+      - user:num_cart_updates_30d
+      - user:num_views_30d
+      - user:num_clicks_30d
+      - user:num_cart_updates_7d
+      - user:num_views_7d
+      - user:num_clicks_7d

@@ -1,0 +1,2 @@
+item:num_views,item:num_clicks,item:num_cart_updates,item:num_views_30d,item:num_clicks_30d,item:num_cart_updates_30d,item:num_views_7d,item:num_clicks_7d,item:num_cart_updates_7d,item:cart_update_turn_rate,item:cart_update_turn_rate_30d
+10429,59,517,795,5,37,190,0,12,0.049573305206635346,0.04654088050314465
