@@ -59,18 +59,21 @@ def test_confidence_per_target_type(target_type, expected):
 
 
 def test_ids_are_indexed_in_ascending_order():
-    matrix, user_to_idx, item_to_idx = build_user_item_matrix(actions(LOG), target_type="MixedCartUpdatePurchase")
+    pairs = [(BIG, 300), (30, 200), (20, 100), (10, 400), (5, 250)]
+    log = [(user, item, "AT_CartUpdate", 1) for user, item in pairs]
+    matrix, user_to_idx, item_to_idx = build_user_item_matrix(actions(log), target_type="CartUpdate")
     assert user_to_idx.columns == ["user_id", "user_idx"]
     assert item_to_idx.columns == ["item_id", "item_idx"]
-    assert user_to_idx.sort("user_idx").rows() == [(20, 0), (BIG, 1)]
-    assert item_to_idx.sort("item_idx").rows() == [(100, 0), (200, 1), (300, 2)]
-    assert matrix.shape == (2, 3)
+    assert user_to_idx.sort("user_idx").rows() == [(5, 0), (10, 1), (20, 2), (30, 3), (BIG, 4)]
+    assert item_to_idx.sort("item_idx").rows() == [(100, 0), (200, 1), (250, 2), (300, 3), (400, 4)]
+    assert matrix.shape == (5, 5)
+    assert as_dict(matrix, user_to_idx, item_to_idx) == {pair: 1.0 for pair in pairs}
 
 
 # BM25 log, CartUpdate: N = 4 users; df(A=1) = 1, df(B=2) = 2, df(C=3) = 2;
-# L_1 = 2 + 1 = 3, L_2 = 3, L_3 = 1, L_4 = 1 -> L_bar = 2
+# L_1 = 2 + 1 = 3, L_2 = 3, L_3 = 1, L_4 = 1 -> L_bar = 2; user 5 only clicked: confidence 0, not in N, df or L
 BM25_LOG = [(1, 1, "AT_CartUpdate", 2), (1, 2, "AT_CartUpdate", 1), (2, 2, "AT_CartUpdate", 3),
-            (3, 3, "AT_CartUpdate", 1), (4, 3, "AT_CartUpdate", 1)]  # fmt: skip
+            (3, 3, "AT_CartUpdate", 1), (4, 3, "AT_CartUpdate", 1), (5, 1, "AT_Click", 1)]  # fmt: skip
 
 
 def bm25(conf: float, df: int, length: float, k1: float = 100.0, b: float = 0.8) -> float:

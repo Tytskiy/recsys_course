@@ -2,7 +2,7 @@
 
 ## About the task
 [ALS, Alternating Least Squares](https://education.yandex.ru/handbook/ml/article/rekomendacii-na-osnove-matrichnyh-razlozhenij#alternating-least-squares-als) is a very popular matrix factorization algorithm.
-In this task you will write your own simple Numpy solver for the ordinary (not Implicit) decomposition.
+In this task you will write your own simple NumPy solver for the ordinary (not Implicit) decomposition.
 
 We predict the score with the following formula: $\hat{r}_{ui} = \langle p_u, q_i \rangle$, where $p_u \in \mathbb{R}^d$ and $q_i \in \mathbb{R}^d$ are the latent vectors (embeddings) of user $u$ and item $i$.
 

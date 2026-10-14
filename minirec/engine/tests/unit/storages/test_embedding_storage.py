@@ -74,6 +74,14 @@ def test_score(storage, request_ids, expected):
     assert dict(hits) == pytest.approx(expected)
 
 
+def test_score_more_ids_than_a_default_page(storage):
+    storage.upsert_embeddings(ITEMS, [(100 + i, np.array([float(i), 0.0, 0.0])) for i in range(12)])
+    # QUERY = [1, 0.5, 0] -> score(100 + i) = i
+    assert dict(storage.score(ITEMS, QUERY, [100 + i for i in range(12)])) == pytest.approx(
+        {100 + i: float(i) for i in range(12)}
+    )
+
+
 @pytest.mark.parametrize(
     ("request_ids", "expected_ids"),
     [

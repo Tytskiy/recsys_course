@@ -1,5 +1,5 @@
 # Basics and services
-In the first week you will get to know the code, study its structure and interfaces, and develop yourself:
+In the first week you will get to know the code, study its structure and interfaces, and implement yourself:
 - The key-value feature storage component `ValkeyFeatureStorage`.
 - Two simple candidate generation algorithms - `TopPop` and `ItemToItemLists`.
 - An experiment management service.

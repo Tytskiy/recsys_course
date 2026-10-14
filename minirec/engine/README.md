@@ -7,11 +7,11 @@ The main entity in this framework is `Recommender`, a protocol that can recommen
 - `CandidateGenerator`: creates a list of suitable candidates for the request from the context
 - `CandidateMixer`: mixes and deduplicates several candidate lists into one list
 - `FeatureManager`: enriches the context or the candidates with features from the storages
-- `Ranker`: reranks the incoming candidates: by a factor, with random sampling, and so on.
-- `Filter`: filters the incoming candidates by an arbitrary condition, for example whether the item identifier is in the Bloom filter from the context or whether the item is in the user's recent history.
+- `Ranker`: reranks the incoming candidates: by a factor, with an ML model, and so on.
+- `Filterer`: filters the incoming candidates by an arbitrary condition, for example whether the item identifier is in the Bloom filter from the context or whether the item is in the user's recent history.
 
 There are also several auxiliary protocols that let the recommender get information from other systems or files while processing a request:
-- `ExperimentManager`: gets, from the context, the parameters for building the feed for the given user, for example the list of candidate generators or the number of candidates for each of them, the sampling temperature, and so on.
+- `ExperimentManager`: gets, from the context, the parameters for building the feed for the given user, for example the list of candidate generators or the number of candidates for each of them, whether to filter out the user's history, and so on.
 - `EmbeddingStorage`: performs operations on user or item embeddings by their identifier: approximate or exact search, getting embeddings or computing distances between items and a user / an anchor item.
 - `FeatureStorage`: gets the features of a user or an item by its identifier from a key-value storage, for example computed statistics, embeddings, lists (the user's history, favourite categories) and more.
 
@@ -103,7 +103,7 @@ engine/
 
 ### interfaces
 - The base types `Embedding`, `ID` and `Factor` for type annotations.
-- The data structures `RecContext` and `Candidate`, which are the main element.
+- The data structures `RecContext` and `Candidate`, which are the main elements.
 - The protocols of the various components.
 - `ComponentConfig`, the base of the typed component configs (pydantic, unknown keys forbidden), and `ComponentDeps`, the shared dependencies: the storages, the snapshot's `EngineData` and the `CandidateLogger`.
 
@@ -117,9 +117,9 @@ Each component in the yaml config is described as a `type` (a key in a registry:
 - Implementations of candidate mixers and the parameterization of the generation stage (how many candidates, from where, in what order).
 
 ### ranking
-Implementations of reranking components: by a factor, ML models, diversity and sampling.
+Implementations of reranking components: by a factor and with ML models.
 
-### feature
+### features
 - The feature configuration, which describes the dependencies between features (values from the storage -> feature -> feature transformation).
 - The logic for computing features and transformations.
 - The feature manager, which enriches the context and the candidates according to a given schema.

@@ -4,7 +4,7 @@
 In recommender systems we often want to run experiments, A/B tests in particular: split users into two (or more) groups in some random way and apply different system parameters / different algorithms depending on the group they fall into. One common way to do this is to hash user identifiers and split them into buckets, mapping each bucket to some group in the experiment. This service provides exactly that functionality: create an experiment and describe its groups, describe the default parameters and the overrides of these parameters in each group.
 
 ## Statement
-Implement an API for storing and managing experiments. The provided template uses FastAPI; the pydantic schemas for the methods are already given to you in `models.py`, as is the hash function `salted_hash`, which determines the bucket number from 1 to `mod` from the identifier and the experiment salt. Use them.
+Implement an API for storing and managing experiments. The provided template uses FastAPI; the pydantic schemas for the methods are already given to you in `models.py`, and the hash function `ExperimentRepository.salted_hash` in `repository.py`, which determines the bucket number from 1 to `mod` from the identifier and the experiment salt. Use them.
 
 You need to implement two methods and the ExperimentRepository class. When the description and the tests contradict each other, always follow the tests, which you can find in the `tests` folder and run locally from the directory:
 ```bash
@@ -27,7 +27,7 @@ The method for getting the user's group in the experiment and the parameters for
 ## Tips
 - You can use SQLModel and SQLAlchemy as the ORM; they integrate well with FastAPI.
 - Use the JSON type to store parameters and overrides: we do not know in advance what structure the parameters will have.
-- To combine `default` and `override`, if a parameter is a dict or a list, it is enough to overwrite parameters entirely at the first level.
+- To combine `default` and `overrides`, if a parameter is a dict or a list, it is enough to overwrite parameters entirely at the first level.
 - Updating an experiment is simply creating a new experiment with the same name.
 - The schema from `models.py` already rejects `mod <= 0` and groups with `range_stop < range_start` (422); range coverage, contiguity and non-overlapping of groups are up to you.
 

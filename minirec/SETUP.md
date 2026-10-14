@@ -48,7 +48,7 @@ Continue with the instructions below
 
 ### Setting up the git repository <a id='git'/>
 
-All work on getting and solving the tasks goes through a git repository. First you need to get it and download it.
+All work on getting and solving the tasks goes through a git repository. First you need to clone it.
 What git is and how to work with it was covered in the [lecture about git](https://yadi.sk/i/YUe3SJYo11EChA).
 
 #### Installing the prerequisites
@@ -142,7 +142,7 @@ The repository root also has a `pyproject.toml`: it is needed for running the te
 To get new tasks, run `git pull`: it downloads the latest updates of the repository.
 
 #### Solving a task
-The code of each task is in a separate week and task directory (`tasks/basics_and_services/experiments_server` and so on); what matters to us is its contents:
+Each task has its own week and task directory (`tasks/basics_and_services/experiments_server` and so on); what matters to us is its contents:
 - the statement and the instructions for testing it locally are in the `README.md` file
 - the task code lives in different parts of our framework, as do the public tests for the task
 

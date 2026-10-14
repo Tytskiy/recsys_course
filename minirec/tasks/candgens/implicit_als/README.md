@@ -15,6 +15,7 @@ Implement the `UserToItemKNN` candidate generator in [`engine/cg/user_to_item_kn
 Implement the training of this candidate generator in [`engine_builder/tasks/models/implicit_als.py`](../../../engine_builder/tasks/models/implicit_als.py):
 - Implement splitting the `user-item` matrix into two by users, warm and cold, by the sum of the matrix row values (with BM25 this is the sum of weights): a warm user has a sum `>= warm_user_threshold`.
 - For warm users you can use the ordinary training procedure, and for cold users do only one step (the implicit framework API allows this out of the box).
+- Warm users are trained by `implicit.als.AlternatingLeastSquares(factors=dim, regularization=l2_alpha, alpha=conf_alpha, iterations=max_iter, random_state=random_state)` on the warm users' rows; the tests compare their embeddings with this model, so the rows of the returned matrix must keep the order of the input rows.
 - Implement the training process itself with the given parameters and the export to Qdrant; study the ready functions in `engine_builder`.
 
 The quality test trains the model on the first 50 days of a synthetic log with built-in taste clusters ([`engine_builder/tests/synthetic.py`](../../../engine_builder/tests/synthetic.py)) and requires Recall@20 on new items in baskets over the last 10 days (items already seen by the user are excluded) to be at least 2 times higher than TopPop's.

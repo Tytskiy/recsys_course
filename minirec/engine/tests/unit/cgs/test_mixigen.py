@@ -1,23 +1,22 @@
 """Mixigen mixer (task `mixigen`). Behaviours:
-- `start_component` builds the Linear model wrapper and keeps the config values;
 - `build_prescore_row`: `[*context_features from user_profile (default_feature_value when
-  absent), cg_index, float(position)]`;
+  absent), cg_index as int, float(position)]`;
 - `compute_quotas` scores every `(cg, position)` slot, `position < num_candidates_per_cg`,
   in one `predict` call, takes the top `total_candidates` slots by score and returns
   `max selected position + 1` per CG; a CG without a selected slot is left out;
 - `merge` asks each CG for exactly its quota (CGs without one are not asked), skips CGs
   missing from `candgens`, logs the raw per-CG lists once, then yields in `cg_names`
-  order with duplicates dropped (the first CG in `cg_names` wins) and `source_cg` set.
+  order with duplicates dropped (the first CG in `cg_names` wins) and `source_cg` set;
+  the experiment `schema` argument is ignored.
 Non-goal: the order among equal slot scores. The prescorer is `SlotTableModel`
-(`tests/fakes.py`): a slot's score is `table[cg_index][position]`.
+(`tests/fakes.py`): a slot's score is `table[cg_index][position]`. `start_component` is
+provided.
 """
 
 from __future__ import annotations
 
-import numpy as np
 import pytest
-from engine.cg.mixing import MixigenCandidateMixer, MixigenConfig
-from engine.score_model import LinearModelWrapper
+from engine.cg.mixing import CGParams, CGSchema, MixigenCandidateMixer
 from tests.fakes import ListCG, RecordingCandidateLogger, SlotTableModel, make_context
 
 CG_NAMES = ["cg_a", "cg_b"]
@@ -39,28 +38,19 @@ def make_mixer(table, total_candidates, candidate_logger=None, context_features=
     )
 
 
-def test_start_component(rec_engine_files_dir, deps):
-    np.save(rec_engine_files_dir / "mix_weights.npy", np.array([1.0, 0.5]))
-    config = MixigenConfig(
-        model_path="mix_weights.npy",
-        model_type="Linear",
-        cg_names=CG_NAMES,
-        total_candidates=5,
-        num_candidates_per_cg=10,
-    )
-
-    mixer = MixigenCandidateMixer.start_component(config, deps)
-
-    assert mixer.name == "MixigenCandidateMixer"
-    assert isinstance(mixer.model_wrapper, LinearModelWrapper)
-    assert (mixer.cg_names, mixer.total_candidates, mixer.num_candidates_per_cg) == (CG_NAMES, 5, 10)
+def make_candgens() -> dict[str, ListCG]:
+    return {"cg_a": ListCG("cg_a", [1, 2]), "cg_b": ListCG("cg_b", [3, 1])}
 
 
 def test_prescore_row_layout():
     mixer = make_mixer(TABLE, 3, context_features=["user_bias", "absent"], default=-3.0)
     context = make_context()
     context.user_profile["user_bias"] = 1.5
-    assert mixer.build_prescore_row("cg_b", 2, context) == [1.5, -3.0, 1, 2.0]
+
+    row = mixer.build_prescore_row("cg_b", 2, context)
+
+    assert row == [1.5, -3.0, 1, 2.0]
+    assert [type(v) for v in row] == [float, float, int, float]
 
 
 def test_all_slots_scored_in_one_predict_call():
@@ -108,9 +98,7 @@ def test_merge_fetches_quotas(table, total_candidates, requested):
 def test_merge_order_and_dedup_follow_cg_names():
     """All four B_FIRST slots are selected (quotas 2 and 2), cg_b's slots scoring higher.
     The output still goes cg_a first, so the shared item 1 keeps `source_cg = cg_a`."""
-    candgens = {"cg_a": ListCG("cg_a", [1, 2]), "cg_b": ListCG("cg_b", [3, 1])}
-
-    merged = list(make_mixer(B_FIRST, 4).merge(candgens, make_context()))
+    merged = list(make_mixer(B_FIRST, 4).merge(make_candgens(), make_context()))
 
     assert [(c.item_id, c.factors["source_cg"]) for c in merged] == [(1, "cg_a"), (2, "cg_a"), (3, "cg_b")]
 
@@ -120,12 +108,22 @@ def test_merge_skips_missing_cg():
     assert [(c.item_id, c.factors["source_cg"]) for c in merged] == [(1, "cg_a"), (2, "cg_a")]
 
 
+def test_merge_ignores_experiment_schema():
+    """Mixigen computes its own quotas: a schema asking cg_b for 1 candidate changes nothing."""
+    schema = CGSchema(ordered_cgs=[CGParams(cg_name="cg_b", num_candidates=1)], total_candidates=1)
+    candgens = make_candgens()
+
+    merged = list(make_mixer(B_FIRST, 4).merge(candgens, make_context(), schema))
+
+    assert {name: cg.requested for name, cg in candgens.items()} == {"cg_a": [2], "cg_b": [2]}
+    assert [c.item_id for c in merged] == [1, 2, 3]
+
+
 def test_merge_logs_raw_lists_once():
     """The log keeps each CG's list as fetched, before dedup: item 1 appears under both."""
     logger = RecordingCandidateLogger()
     context = make_context()
-    candgens = {"cg_a": ListCG("cg_a", [1, 2]), "cg_b": ListCG("cg_b", [3, 1])}
 
-    list(make_mixer(B_FIRST, 4, candidate_logger=logger).merge(candgens, context))
+    list(make_mixer(B_FIRST, 4, candidate_logger=logger).merge(make_candgens(), context))
 
     assert logger.cg_records == [(context, {"cg_a": [1, 2], "cg_b": [3, 1]})]

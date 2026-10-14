@@ -28,7 +28,7 @@ For items that almost all users interacted with, $\text{idf}(i) \le 0$. After re
 
 
 ## Statement
-Implement, with `polars`, building the target matrix in [`engine_builder/tasks/actions.py`](../../../engine_builder/tasks/actions.py), as well as the BM-25 transform for it.
+Implement, with `polars`, building the target matrix in [`engine_builder/tasks/actions.py`](../../../engine_builder/tasks/actions.py), as well as the BM25 transform for it.
 - For each user and item, collect the counts of the different actions.
 - Converting the action counts, as polars columns, into the different kinds of targets is done for you.
 - Then convert the dataframe into a sparse matrix.

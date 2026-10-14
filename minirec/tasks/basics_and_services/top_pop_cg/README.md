@@ -1,7 +1,7 @@
 # TopPop Candidate Generator
 
 ## About the task
-TopPop is a simple candidate generator that returns popular items, and a popular baseline. By the way, it is not that easy to beat, especially in its DecayPop variant! But we are interested in the sampling version: instead of taking the top popular items, we sample items with probability proportional to the number of interactions with each item.
+TopPop is a simple candidate generator that returns popular items; it is also a popular baseline. By the way, it is not that easy to beat, especially in its DecayPop variant! But we are interested in the sampling version: instead of taking the top popular items, we sample items with probability proportional to the number of interactions with each item.
 
 ## Statement
 Implement the `TopPop` candidate generator in [`engine/cg/top_pop.py`](../../../engine/src/engine/cg/top_pop.py).

@@ -3,7 +3,6 @@ from __future__ import annotations
 import csv
 import json
 import shutil
-from dataclasses import dataclass
 from pathlib import Path
 
 import engine.candidate_logger as cl
@@ -32,12 +31,6 @@ with _SAMPLE_ROW_PATH.open() as f:
     _SAMPLE_FACTORS: dict[str, float] = {
         k: float(v) for k, v in next(csv.DictReader(f)).items()
     }
-
-
-@dataclass
-class EngineStorages:
-    feature_storage: ValkeyFeatureStorage
-    embedding_storage: QdrantEmbeddingStorage
 
 
 @pytest.fixture

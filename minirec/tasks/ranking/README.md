@@ -18,7 +18,7 @@ Everything the model sees must be known at request time, and everything it learn
 The recommended order is 1 → 2; tasks 3 and 4 are independent. The tasks' tests do not depend on each other: where someone else's functionality is needed, the tests use their own stubs and the seeded simulator [`engine_builder/tests/ranking/sim.py`](../../engine_builder/tests/ranking/sim.py).
 
 ## Ready-made pipeline
-[`engine_builder/build_ranker.py`](../../engine_builder/build_ranker.py) is provided in full and uses your functions: `load_actions → collect_logged_features (replay) → PoolBuilder → theta per surface → ipw_weights → train_catboost → add_files_to_archive`. It needs the `docker compose` stack running (MinIO, Valkey, Qdrant).
+[`engine_builder/build_ranker.py`](../../engine_builder/build_ranker.py) is provided in full and uses your functions: `load_actions → collect_logged_features (replay) → PoolBuilder → theta per surface → ipw_weights → train_catboost → add_files_to_archive`. It needs the `docker compose` stack running (S3, Valkey, Qdrant).
 
 Run it after `build_recommender.py`, which rebuilds the snapshot and drops the ranker from it, with `--last-dt` equal to its `--latest-dt`. The first replay day is built from the previous day's data, so take `--first-dt` one day earlier than the window you need. Copy the `default_feature_value` value from `ranker_config.yaml` into the `ModelRanker` config, otherwise the same candidate gets different features offline and online.
 

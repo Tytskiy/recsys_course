@@ -2,9 +2,10 @@
 
 Behaviours, one named test or case each:
 - `estimate_pbm`: the exact EM updates from theta = gamma = 0.5 (hand case, one and two steps:
-  both M-steps from one E-step, normalized once at the end), `theta[0] == 1`, one
-  log-likelihood value per iteration, computed before the update and never decreasing, finite
-  results when a row has no non-clicks (p = 1), row order irrelevant, and recovery of the true theta on the seeded simulator where naive CTR fails.
+  both M-steps from one E-step, normalized once at the end, a position without impressions
+  keeps 0.5), `theta[0] == 1`, one log-likelihood value per iteration, computed before the
+  update and never decreasing, finite results when a row has no non-clicks (p = 1), row order
+  irrelevant, and recovery of the true theta on the seeded simulator where naive CTR fails.
 - `ipw_weights`: `min(1 / theta[p - 1], clip)` for positives (clip boundary pair), the last theta
   past the fitted range, 1.0 for negatives and for positives without a position, and better
   per-item calibration than naive CTR on the simulator.
@@ -52,16 +53,18 @@ def world_counts(world_log) -> pl.DataFrame:
 
 
 @pytest.mark.parametrize(
-    ("n_iter", "theta2"),
+    ("n_iter", "max_pos", "theta"),
     [
-        pytest.param(1, 0.8125, id="one_step"),
-        pytest.param(2, 0.6967013066759641, id="two_steps_one_e_step_normalize_once"),
+        pytest.param(1, 2, [1.0, 0.8125], id="one_step"),
+        pytest.param(2, 2, [1.0, 0.6967013066759641], id="two_steps_one_e_step_normalize_once"),
+        # position 3 has no rows: theta3 stays 0.5, normalized by theta1 = 8/15
+        pytest.param(1, 3, [1.0, 0.8125, 0.9375], id="position_without_impressions_keeps_half"),
     ],
 )
-def test_em_steps_hand_case(n_iter: int, theta2: float):
-    result = estimate_pbm(HAND_COUNTS, max_pos=2, n_iter=n_iter)
+def test_em_steps_hand_case(n_iter: int, max_pos: int, theta: list[float]):
+    result = estimate_pbm(HAND_COUNTS, max_pos=max_pos, n_iter=n_iter)
 
-    np.testing.assert_allclose(result.theta, [1.0, theta2], rtol=1e-9)
+    np.testing.assert_allclose(result.theta, theta, rtol=1e-9)
 
 
 def test_log_likelihood_is_recorded_before_each_update():

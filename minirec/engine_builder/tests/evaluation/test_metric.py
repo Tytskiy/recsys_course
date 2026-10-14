@@ -44,6 +44,13 @@ def inv_log(rank: int) -> float:
             id="NDCG-unretrieved-positives-lower-score",
         ),
         pytest.param(NDCG(2), [1, 5, 6], [1, 2, 3], inv_log(1) / (inv_log(1) + inv_log(2)), id="NDCG@2-ideal-capped-at-k"),
+        pytest.param(
+            NDCG(5),
+            [1, 5, 6],
+            [1, 2],
+            inv_log(1) / (inv_log(1) + inv_log(2) + inv_log(3)),
+            id="NDCG@5-ideal-not-capped-by-short-list",
+        ),
         pytest.param(NDCG(None), [], [1, 2, 3], 0.0, id="NDCG-no-positives-is-0"),
     ],
 )
@@ -79,6 +86,7 @@ PRODUCTS = pl.DataFrame({"item_id": [1, 2, 3, 4, 1], "item_category": ["a", "b",
         pytest.param(None, [1, 2, 4], 1.0, id="CategoryDiversity-all-distinct"),
         pytest.param(None, [1, 2, 3], 2 / 3, id="CategoryDiversity-repeated-category"),
         pytest.param(2, [1, 3, 2], 1 / 2, id="CategoryDiversity@2"),
+        pytest.param(5, [1, 2], 1.0, id="CategoryDiversity@5-short-list-over-its-length"),
         pytest.param(None, [], 0.0, id="CategoryDiversity-empty-candidates"),
     ],
 )

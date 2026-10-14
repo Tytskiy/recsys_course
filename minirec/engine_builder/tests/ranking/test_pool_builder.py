@@ -4,8 +4,9 @@ Behaviours, one named test or case each:
 - `join_asof_actions_to_features`: forward-only, window inclusive, highest priority wins, one row per
   `(request_id, item_id)`, unmatched candidates dropped, helper columns dropped, the winning action's
   `label_position` / `label_source_type` carried, the feature log's own columns kept.
-- `build_dataset`: positive / negative labels, requests without a positive dropped, at most 9
-  negatives per request, unknown actions and null request ids dropped, `group_id` = str(request_id).
+- `build_dataset`: positive / negative labels, requests without a positive dropped, every positive
+  kept and at most 9 negatives per request, unknown actions and null request ids dropped,
+  `group_id` = str(request_id), one row per `(request_id, item_id)`, sorted by `group_id`.
 - `read_logs`: one row per candidate with `position` / `served`, blank lines skipped, ids as UInt64,
   `request_time` as naive UTC.
 - `train_test_split_by_time`: by earliest request time (not by id), whole requests, `int()` rounding.
@@ -14,7 +15,6 @@ Behaviours, one named test or case each:
 """
 from __future__ import annotations
 
-import dataclasses
 from datetime import datetime, timedelta, timezone
 
 import orjson
@@ -32,87 +32,25 @@ from tests.ranking.pool_data import (
 )
 
 
-@dataclasses.dataclass
-class JoinCase:
-    name: str
-    request_ts: int
-    window_size: int
-    item_id: int
-    expected_count: int
-    expected_action_type: str | None  # None = skip check
+# dm_action holds, for USER_ID + ITEM_ID: CartUpdate at CART_UPDATE_TS, View at +21 s, Purchase at +400 s
+@pytest.mark.parametrize(
+    ("request_ts", "window_size", "item_id", "expected"),
+    [
+        # View at +14 s comes first, Purchase at +393 s has the higher priority
+        pytest.param(CART_UPDATE_TS + 7, 500, ITEM_ID, "AT_Purchase", id="highest_priority_action_in_window_wins"),
+        pytest.param(CART_UPDATE_TS + 7, 100, ITEM_ID, "AT_View", id="past_action_excluded_next_in_window_matched"),
+        pytest.param(CART_UPDATE_TS - 2000, 1800, ITEM_ID, None, id="action_outside_window_excluded"),
+        pytest.param(CART_UPDATE_TS, 1800, 0, None, id="unknown_item_returns_empty"),
+        pytest.param(CART_UPDATE_TS - 100, 100, ITEM_ID, "AT_CartUpdate", id="action_at_exact_window_boundary_included"),
+        pytest.param(CART_UPDATE_TS - 100, 99, ITEM_ID, None, id="action_one_second_past_window_excluded"),
+        pytest.param(CART_UPDATE_TS, 0, ITEM_ID, "AT_CartUpdate", id="action_at_exact_request_time_matched"),
+    ],
+)
+def test_join_asof_actions_to_features(request_ts, window_size, item_id, expected, dm_action, make_feature_log):
+    feature_log = make_feature_log(request_ts, item_id=item_id)
+    result = PoolBuilder.join_asof_actions_to_features(feature_log, dm_action, window_size=window_size)
 
-    def __str__(self) -> str:
-        return self.name
-
-
-JOIN_CASES = [
-    JoinCase(
-        name="highest_priority_action_in_window_wins",
-        request_ts=CART_UPDATE_TS - 7,
-        window_size=100,
-        item_id=ITEM_ID,
-        expected_count=1,
-        expected_action_type="AT_CartUpdate",
-    ),
-    JoinCase(
-        name="past_action_excluded_next_in_window_matched",
-        request_ts=CART_UPDATE_TS + 7,
-        window_size=100,
-        item_id=ITEM_ID,
-        expected_count=1,
-        expected_action_type="AT_View",
-    ),
-    JoinCase(
-        name="action_outside_window_excluded",
-        request_ts=CART_UPDATE_TS - 2000,
-        window_size=1800,
-        item_id=ITEM_ID,
-        expected_count=0,
-        expected_action_type=None,
-    ),
-    JoinCase(
-        name="unknown_item_returns_empty",
-        request_ts=CART_UPDATE_TS,
-        window_size=1800,
-        item_id=0,
-        expected_count=0,
-        expected_action_type=None,
-    ),
-    JoinCase(
-        name="action_at_exact_window_boundary_included",
-        request_ts=CART_UPDATE_TS - 100,
-        window_size=100,
-        item_id=ITEM_ID,
-        expected_count=1,
-        expected_action_type="AT_CartUpdate",
-    ),
-    JoinCase(
-        name="action_one_second_past_window_excluded",
-        request_ts=CART_UPDATE_TS - 100,
-        window_size=99,
-        item_id=ITEM_ID,
-        expected_count=0,
-        expected_action_type=None,
-    ),
-    JoinCase(
-        name="action_at_exact_request_time_matched",
-        request_ts=CART_UPDATE_TS,
-        window_size=0,
-        item_id=ITEM_ID,
-        expected_count=1,
-        expected_action_type="AT_CartUpdate",
-    ),
-]
-
-
-@pytest.mark.parametrize("case", JOIN_CASES, ids=str)
-def test_join_asof_actions_to_features(case: JoinCase, dm_action: pl.DataFrame, make_feature_log):
-    feature_log = make_feature_log(case.request_ts, item_id=case.item_id)
-    result = PoolBuilder.join_asof_actions_to_features(feature_log, dm_action, window_size=case.window_size)
-
-    assert len(result) == case.expected_count
-    if case.expected_action_type is not None:
-        assert result["action_type"][0] == case.expected_action_type
+    assert result["action_type"].to_list() == ([expected] if expected else [])
 
 
 def test_join_output_drops_intermediate_columns(dm_action: pl.DataFrame, make_feature_log):
@@ -203,8 +141,8 @@ def test_build_dataset_negatives_capped_at_9_per_request(pool_builder: PoolBuild
     )
     result = pool_builder.build_dataset(candidates)
 
-    negatives = result.filter(pl.col("target") == 0.0)
-    assert len(negatives) <= 9
+    assert len(result.filter(pl.col("target") == 1.0)) == 1
+    assert len(result.filter(pl.col("target") == 0.0)) == 9
 
 
 def test_build_dataset_negatives_sampled_independently_per_request(pool_builder: PoolBuilder, make_joined_candidates):
@@ -268,6 +206,20 @@ def test_build_dataset_group_id_is_string_request_id(pool_builder: PoolBuilder, 
 
     assert result["group_id"].dtype == pl.String
     assert result["group_id"][0] == "7"
+
+
+def test_build_dataset_one_row_per_request_item_sorted_by_group_id(pool_builder: PoolBuilder, make_joined_candidates):
+    candidates = make_joined_candidates([
+        {"request_id": 2, "item_id": 20, "action_type": "AT_CartUpdate"},
+        {"request_id": 1, "item_id": 10, "action_type": "AT_CartUpdate"},
+        {"request_id": 2, "item_id": 20, "action_type": "AT_CartUpdate"},
+        {"request_id": 1, "item_id": 11, "action_type": "AT_View"},
+        {"request_id": 2, "item_id": 21, "action_type": "AT_View"},
+    ])
+    result = pool_builder.build_dataset(candidates)
+
+    assert result["group_id"].to_list() == ["1", "1", "2", "2"]
+    assert sorted(result.select("request_id", "item_id").rows()) == [(1, 10), (1, 11), (2, 20), (2, 21)]
 
 
 def _write_jsonl(path, entries: list[dict]) -> None:
@@ -384,9 +336,7 @@ def test_read_logs_request_time_is_naive_utc(tmp_path, logged_time: str, expecte
 
 
 def test_build_pools_from_log_end_to_end(tmp_path, dm_action: pl.DataFrame):
-    """Integration: hand-crafted JSONL flows through read_logs →
-    join_asof_actions_to_features → build_dataset → build_cbm_pool, exactly the
-    way the real ranker training pipeline drives PoolBuilder."""
+    """read_logs -> join_asof_actions_to_features -> build_dataset -> build_cbm_pool, as build_ranker drives it."""
     request_dt_1 = datetime.fromtimestamp(CART_UPDATE_TS - 100, tz=timezone.utc).replace(tzinfo=None)
     request_dt_2 = datetime.fromtimestamp(CART_UPDATE_TS - 60, tz=timezone.utc).replace(tzinfo=None)
     log_path = tmp_path / "candidates.jsonl"
@@ -445,7 +395,8 @@ def _linear_time_dataset(n_requests: int, rows_per_request: int = 1) -> pl.DataF
 
 
 def test_train_test_split_by_time_earliest_in_train_latest_in_test():
-    train, test = PoolBuilder.train_test_split_by_time(_linear_time_dataset(10), test_size=0.2)
+    """Default `test_size` 0.2: 8 of 10 requests go to train."""
+    train, test = PoolBuilder.train_test_split_by_time(_linear_time_dataset(10))
 
     assert _request_ids(train) == {1, 2, 3, 4, 5, 6, 7, 8}
     assert _request_ids(test) == {9, 10}
@@ -468,8 +419,7 @@ def test_train_test_split_orders_by_time_not_by_request_id():
 
 
 def test_train_test_split_keeps_all_rows_of_a_request_together():
-    """A request appearing in train must not have any of its rows leak into test
-    (group_id ranking depends on contiguous groups)."""
+    """Rows of one request never split across train and test."""
     train, test = PoolBuilder.train_test_split_by_time(
         _linear_time_dataset(n_requests=5, rows_per_request=4), test_size=0.2,
     )
@@ -480,9 +430,7 @@ def test_train_test_split_keeps_all_rows_of_a_request_together():
 
 
 def test_train_test_split_uses_min_request_time_per_request():
-    """If a request has multiple rows with different timestamps (defensive — the
-    real pipeline always carries a stable per-request time), ordering is by the
-    earliest occurrence so a "first seen" semantic holds."""
+    """Request 1 has rows at 5 h and 1 h: its earliest row orders it first."""
     rids, hours = [1, 1, 2, 3], [5, 1, 2, 3]
     dataset = pl.DataFrame({
         "request_id": pl.Series(rids, dtype=pl.UInt64),
@@ -494,13 +442,6 @@ def test_train_test_split_uses_min_request_time_per_request():
 
     assert _request_ids(train) == {1}
     assert _request_ids(test) == {2, 3}
-
-
-def test_train_test_split_default_test_size_is_20_percent():
-    train, test = PoolBuilder.train_test_split_by_time(_linear_time_dataset(10))
-
-    assert len(_request_ids(train)) == 8
-    assert len(_request_ids(test)) == 2
 
 
 def test_train_test_split_rounds_down_via_int_cast():

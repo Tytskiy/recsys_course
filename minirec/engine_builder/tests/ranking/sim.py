@@ -69,7 +69,7 @@ def sample_log(world: World, eps: float, seed: int) -> Log:
 
 
 def log_frame(log: Log) -> pl.DataFrame:
-    """OPE log: `request_id`, `item_id`, `position` (1-based), `click`, `propensity`."""
+    """One row per shown item: `request_id`, `item_id`, `position` (1-based), `click`, `propensity`."""
     n_requests, list_len = log.items.shape
     return pl.DataFrame({
         "request_id": np.repeat(np.arange(n_requests), list_len),

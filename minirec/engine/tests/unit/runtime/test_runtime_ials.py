@@ -1,8 +1,8 @@
 """Runtime iALS user step (task `runtime_als`). Pinned: `collect_from_history` returns the stored
 `item_<type>` embeddings of the distinct history items sorted by id, with confidence `alpha * count`, and
 skips items without an embedding; `solve` is the exact iALS user step with the full item Gramian;
-`hydrate_context` solves over the first `max_history` items and writes `user_profile["user_<type>"]`, or
-nothing when no item has an embedding.
+`hydrate_context` solves over the first `max_history` items of `user_history[action_type]` and writes
+`user_profile["user_<type>"]`, or nothing when no item has an embedding.
 """
 
 from __future__ import annotations
@@ -22,11 +22,14 @@ def embedding_storage() -> DictEmbeddingStorage:
     return DictEmbeddingStorage({"item_iALS": {i: np.array(v) for i, v in ITEM_VECTORS.items()}})
 
 
-def make_runtime(storage: EmbeddingStorage, alpha: float = 1.0, max_history: int | None = None) -> RuntimeIALS:
+def make_runtime(
+    storage: EmbeddingStorage, alpha: float = 1.0, max_history: int | None = None, embedding_type: str = "iALS"
+) -> RuntimeIALS:
     return RuntimeIALS(
         embedding_storage=storage,
         action_type="AT_View",
         item_gramian=2.0 * np.eye(3, dtype=np.float32),
+        embedding_type=embedding_type,
         alpha=alpha,
         l2_alpha=0.5,
         max_history=max_history,
@@ -75,9 +78,18 @@ def test_solve(embedding_storage, factors, confidence, expected):
 )
 def test_hydrate_context_writes_user_embedding(embedding_storage, feed_context: RecContext, history, max_history, expected):
     """The embedding goes to `user_profile["user_<embedding_type>"]`, where `UserToItemKNN` reads it."""
-    feed_context.user_history = {"AT_View": history}
+    feed_context.user_history = {"AT_View": history, "AT_Click": [4]}
     context = make_runtime(embedding_storage, max_history=max_history).hydrate_context(feed_context)
     np.testing.assert_allclose(np.asarray(context.user_profile["user_iALS"]), expected, atol=1e-5)
+
+
+def test_embedding_type_names_collection_and_profile_key(feed_context: RecContext):
+    storage = DictEmbeddingStorage({"item_iALS": {1: np.array(E1)}, "item_BPR": {1: np.array(E2)}})
+    feed_context.user_history = {"AT_View": [1]}
+    context = make_runtime(storage, embedding_type="BPR").hydrate_context(feed_context)
+    # item_BPR[1] = e2 with confidence 1 -> u = e2 / (2 + 0.5)
+    np.testing.assert_allclose(np.asarray(context.user_profile["user_BPR"]), [0.0, 0.4, 0.0], atol=1e-5)
+    assert "user_iALS" not in context.user_profile
 
 
 def test_collect_fetches_each_item_once(embedding_storage):

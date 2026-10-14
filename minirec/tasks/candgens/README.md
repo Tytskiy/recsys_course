@@ -5,6 +5,6 @@ In the second week you will work with candidate generation in `engine`, as well 
 - Implement two matrix factorization algorithms - [BPR](./bpr/README.md) and [Explicit ALS](./explicit_als/README.md).
 - Implement an [EmbeddingStorage](./embedding_storage/README.md) for the runtime on top of the Qdrant vector DB and the [SLIM](./slim/README.md) candidate generator.
 - Implement the offline process for training [Implicit ALS](./implicit_als/README.md) and a CG based on EmbeddingStorage.
-- Implement a [component for the iALS step](./runtime_als/README.md) towards the user in the runtime.
+- Implement a [component](./runtime_als/README.md) that does the iALS step for the user at runtime.
 
-When you are done, you will have an impressive set of different candidate generators and different algorithms for training them to experiment with for your recommender - for example, target reweighting applies to different models, and an example `evaluation` script for ImplicitALS is in the root of `engine_builder`.
+When you are done, you will have an impressive set of different candidate generators and different algorithms for training them to experiment with for your recommender - for example, target reweighting applies to different models, and an example training and evaluation script for ImplicitALS, `train_implicit_als.py`, is in the root of `engine_builder`.

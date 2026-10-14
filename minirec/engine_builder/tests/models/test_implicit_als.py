@@ -1,9 +1,12 @@
 """iALS pipeline, builder half (task `implicit_als`). Pinned: `split_by_activity` splits rows by their sum
-(warm at `>= warm_user_threshold`) and keeps row order; `train_model` returns one user row per matrix row,
-and a cold user's row is one exact iALS user step on the returned item factors; `export_embeddings` writes
-`item_<type>` and `user_<type>` with the Dot metric, keyed by the original ids; the whole pipeline beats
-TopPop on held-out data. The KNN CG half is engine/tests/unit/cgs/test_user_to_item_knn.py.
+(warm at `>= warm_user_threshold`) and keeps row order; `train_model` returns one user row per matrix row:
+warm rows are `implicit`'s fit on the warm rows, a cold row is one exact iALS user step on the returned item
+factors; `export_embeddings` writes `item_<type>` and `user_<type>` with the Dot metric, keyed by the
+original ids; `train_implicit_als` builds the matrix from `params.target_type` and
+`params.use_bm25_reweighting`, and the whole pipeline beats TopPop on held-out data. The KNN CG half is engine/tests/unit/cgs/test_user_to_item_knn.py.
 """
+
+import dataclasses
 
 import numpy as np
 import polars as pl
@@ -12,6 +15,7 @@ import scipy.sparse as sps
 import tasks.models.implicit_als as implicit_als
 from engine.interfaces import EmbeddingStorage
 from engine.storages import QdrantEmbeddingStorage
+from implicit.als import AlternatingLeastSquares
 from tests.synthetic import SMALL, make_actions, recall_ndcg_at_k, split_ts, top_pop_factors, train_test
 
 # row sums: 4, 3, 0, 3.5, 5 (BM25 weights are not integers)
@@ -62,6 +66,17 @@ def test_train_model_shapes():
     assert items.shape == (20, 4)
 
 
+def test_warm_rows_are_the_fit_on_warm_users():
+    """Warm rows keep their matrix positions: they equal `implicit`'s fit of the same params on the warm rows."""
+    matrix = interactions()
+    users, items = implicit_als.train_model(matrix, PARAMS)
+    warm, _, cold_ids = implicit_als.split_by_activity(matrix, PARAMS.warm_user_threshold)
+    model = AlternatingLeastSquares(factors=4, regularization=0.1, alpha=2.0, iterations=3, random_state=0)
+    model.fit(warm)
+    np.testing.assert_allclose(users[np.setdiff1d(np.arange(30), cold_ids)], model.user_factors, rtol=1e-5)
+    np.testing.assert_allclose(items, model.item_factors, rtol=1e-5)
+
+
 def test_cold_user_is_one_exact_user_step():
     """A cold row is the iALS user step on the trained items:
     (Y^T Y + l2 I + sum_j (c_j - 1) y_j y_j^T) x = sum_j c_j y_j, with c_j = conf_alpha * r_j."""
@@ -97,6 +112,30 @@ def test_export_embeddings_keys_by_original_ids():
     assert (item_metric, user_metric) == ("Dot", "Dot")
     assert {k: v.tolist() for k, v in item_vectors.items()} == {100: [1.0, 0.0], 200: [0.0, 1.0]}
     assert {k: v.tolist() for k, v in user_vectors.items()} == {5: [1.0, 1.0], 6: [2.0, 2.0], 7: [3.0, 3.0]}
+
+
+# N = 3 clicking users: item 10 has df = 3 (idf = log 3 - log 4 < 0, dropped with BM25), items 11-13 df = 1;
+# user 4 only adds to cart
+CLICK_LOG = pl.DataFrame(
+    {
+        "user_id": [1, 1, 2, 2, 3, 3, 4],
+        "item_id": [10, 11, 10, 12, 10, 13, 10],
+        "action_type": ["AT_Click"] * 6 + ["AT_CartUpdate"],
+    },
+    schema={"user_id": pl.UInt64, "item_id": pl.UInt64, "action_type": pl.String},
+)
+
+
+@pytest.mark.parametrize(
+    ("use_bm25_reweighting", "expected_items"),
+    [pytest.param(False, {10, 11, 12, 13}, id="counts"), pytest.param(True, {11, 12, 13}, id="bm25_drops_item_10")],
+)
+def test_train_implicit_als_builds_matrix_from_params(use_bm25_reweighting, expected_items):
+    storage = RecordingStorage()
+    params = dataclasses.replace(PARAMS, target_type="Click", use_bm25_reweighting=use_bm25_reweighting)
+    implicit_als.train_implicit_als(CLICK_LOG, storage, params, embedding_type="test")
+    assert set(storage.indexes["user_test"][1]) == {1, 2, 3}
+    assert set(storage.indexes["item_test"][1]) == expected_items
 
 
 def test_train_implicit_als_beats_top_pop_on_held_out_log(qdrant_env):

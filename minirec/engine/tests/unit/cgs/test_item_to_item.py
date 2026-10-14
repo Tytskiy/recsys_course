@@ -67,11 +67,13 @@ def test_anchors_limited_by_num_items_from_history(num_items_from_history, expec
     [
         pytest.param(0, [], id="zero"),
         pytest.param(1, [101], id="one"),
-        pytest.param(3, [101, 102, 201], id="cut_after_first_anchor"),
-        pytest.param(4, [101, 102, 201, 301], id="cut_inside_a_list"),
-        pytest.param(5, [101, 102, 201, 301, 302], id="exactly_all"),
-        pytest.param(6, [101, 102, 201, 301, 302], id="one_past_all"),
+        pytest.param(2, [101, 102], id="cut_after_first_anchor"),
+        pytest.param(3, [101, 102, 401], id="skipped_duplicate_not_counted"),
+        pytest.param(4, [101, 102, 401, 301], id="cut_inside_a_list"),
+        pytest.param(5, [101, 102, 401, 301, 302], id="exactly_all"),
+        pytest.param(6, [101, 102, 401, 301, 302], id="one_past_all"),
     ],
 )
 def test_stops_at_num_candidates(num_candidates, expected):
-    assert extract({"AT_View": [10, 20, 30]}, num_candidates=num_candidates) == expected
+    # 10 -> 101, 102; 40 -> 101 (already yielded), 401; 30 -> 301, 302
+    assert extract({"AT_View": [10, 40, 30]}, num_candidates=num_candidates) == expected

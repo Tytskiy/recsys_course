@@ -2,9 +2,10 @@
 reload_engine waits for the archive or times out; start loads the first engine (errors propagate)
 and starts polling; wait_for_stop; drain_and_shutdown waits for in-flight requests up to a
 timeout, then shuts down once; the poll loop reloads only on marker content other than the marker
-read before the last load, retires the old engine in the background and keeps polling on failures; a snapshot published during the first load is picked
-up; stop ends polling (a failed poll task is logged, not raised), drains the last engine and
-awaits every pending drain. Helpers: tests/runtime_harness.py."""
+read before the last load (a first marker after a start without one is new), retires the old
+engine in the background and keeps polling on failures; a snapshot published during the first
+load is picked up; stop ends polling (a failed poll task is logged, not raised), drains the last
+engine and awaits every pending drain. Helpers: tests/runtime_harness.py."""
 
 from __future__ import annotations
 
@@ -31,13 +32,20 @@ from tests.runtime_harness import (
 EARLY_SHUTDOWN_GRACE_SEC = 0.2
 
 
-def test_reload_engine_times_out_without_archive(monkeypatch, tmp_path) -> None:
+@pytest.mark.parametrize(
+    "load",
+    [
+        pytest.param(lambda runtime: runtime.reload_engine(), id="reload_engine"),
+        pytest.param(lambda runtime: asyncio.run(runtime.start()), id="start_propagates_failed_first_load"),
+    ],
+)
+def test_times_out_without_archive(monkeypatch, tmp_path, load) -> None:
     runtime = make_runtime(monkeypatch, tmp_path, [FakeEngine(1)])
     Snapshot(tmp_path).archive.unlink()
     monkeypatch.setattr(runtime_module, "DEFAULT_TIMEOUT_INTERVAL_SEC", 0.1)
 
     with pytest.raises(FileNotFoundError, match="Timed out waiting for archive"):
-        runtime.reload_engine()
+        load(runtime)
 
 
 def test_reload_engine_waits_for_archive(monkeypatch, tmp_path) -> None:
@@ -49,15 +57,6 @@ def test_reload_engine_waits_for_archive(monkeypatch, tmp_path) -> None:
     threading.Timer(0.05, snapshot.archive.write_bytes, args=[b"v1"]).start()
 
     assert runtime.reload_engine() is engine
-
-
-def test_start_propagates_failed_first_load(monkeypatch, tmp_path) -> None:
-    runtime = make_runtime(monkeypatch, tmp_path, [FakeEngine(1)])
-    Snapshot(tmp_path).archive.unlink()
-    monkeypatch.setattr(runtime_module, "DEFAULT_TIMEOUT_INTERVAL_SEC", 0.1)
-
-    with pytest.raises(FileNotFoundError, match="Timed out waiting for archive"):
-        asyncio.run(runtime.start())
 
 
 def test_start_loads_engine_and_polls(monkeypatch, tmp_path) -> None:
@@ -178,6 +177,26 @@ def test_marker_change_swaps_engine(monkeypatch, tmp_path, versions) -> None:
 
     asyncio.run(scenario())
     assert [engine.shutdown_calls for engine in engines] == [1] * len(engines)
+
+
+def test_first_marker_after_start_without_marker_swaps_engine(monkeypatch, tmp_path) -> None:
+    v1, v2 = FakeEngine(1), FakeEngine(2)
+    runtime = make_runtime(monkeypatch, tmp_path, [v1, v2])
+    snapshot = Snapshot(tmp_path)
+    snapshot.marker.unlink()
+
+    async def scenario() -> None:
+        ticks = Ticks(runtime)
+        await runtime.start()
+        await ticks.ready()
+        await ticks.step()
+        assert runtime.engine is v1
+        snapshot.publish(b"v2", "v2")
+        await ticks.step()
+        assert runtime.engine is v2
+        await runtime.stop()
+
+    asyncio.run(scenario())
 
 
 def rewrite_same_marker(snapshot: Snapshot) -> None:

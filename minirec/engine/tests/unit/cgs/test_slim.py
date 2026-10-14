@@ -1,7 +1,7 @@
 """SLIM CG (task `slim`). Pinned: `start_component` reads the mappings JSON and the weight matrix through
 `deps.engine_data`; `extract_candidates` scores items by summing the weight rows of the distinct known
 items in `user_history[action_type]`, yields the top `num_candidates` by score (at most the catalogue, none for 0),
-and does not exclude history items. Non-goal: the order among equal scores.
+and does not exclude history items or zero scores. Non-goal: the order among equal scores.
 """
 
 from __future__ import annotations
@@ -69,6 +69,8 @@ def candgen() -> SLIMToHistory:
         pytest.param([10, 30], 1, [10], id="one_candidate"),
         pytest.param([10, 30], 4, [10, 40, 20, 30], id="num_candidates_equals_catalogue"),
         pytest.param([10, 30], 5, [10, 40, 20, 30], id="num_candidates_past_catalogue"),
+        # row 30 = [0.5, 0.2, 0.0, 0.1]: item 30 scores 0 and still fills the list
+        pytest.param([30], 4, [10, 20, 40, 30], id="zero_score_item_still_returned"),
     ],
 )
 def test_extract_candidates(candgen, feed_context: RecContext, history, num_candidates, expected):

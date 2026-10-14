@@ -17,6 +17,7 @@ KEY_SHAPES = {
     "same_user_other_item": {"user_id": 1, "item_id": 2},
 }
 
+
 def test_start_uses_get_client(valkey_env):
     storage = ValkeyFeatureStorage.start({"readonly": False})
     storage.update({"f": 1}, item_id=5)
@@ -45,6 +46,7 @@ def test_each_key_shape_is_isolated(feature_storage, shape):
         feature_storage.update({"f": value}, **key)
     assert feature_storage.extract(["f"], **KEY_SHAPES[shape]) == {"f": list(KEY_SHAPES).index(shape)}
 
+
 @pytest.mark.parametrize(
     ("features", "expected"),
     [
@@ -67,7 +69,7 @@ def test_extract_unknown_key_is_empty(feature_storage):
     ("features", "item_ids", "user_id", "expected"),
     [
         pytest.param(["f1", "f2"], [1, 2], 123, {1: {"f1": "a"}, 2: {"f1": "b", "f2": 2}}, id="per_item"),
-        pytest.param(["f1"], [2, 1], 123, {2: {"f1": "b"}, 1: {"f1": "a"}}, id="requested_order"),
+        pytest.param(["f1"], [2, 1], 123, {2: {"f1": "b"}, 1: {"f1": "a"}}, id="items_requested_in_reverse"),
         pytest.param(["f1"], [1, 3], 123, {1: {"f1": "a"}, 3: {}}, id="unknown_item_empty_dict"),
         pytest.param(["f1"], [1], None, {1: {"f1": "x"}}, id="item_only_keys"),
         pytest.param(["f1"], [1], 456, {1: {}}, id="other_user_sees_nothing"),
