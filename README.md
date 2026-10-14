@@ -44,6 +44,18 @@ This repository contains materials for the Recommender Systems course taught at 
     - Lecture: state-of-the-art approaches & novel papers in RecSys
     - Practice: best contest colutions on yambda retrieval
 
+## Homeworks
+
+- Week 1: [minirec: basics and services](minirec/tasks/basics_and_services/) - feature storage, simple candidate generators, A/B experiments server, recommendation service with hot reload
+- Week 2: [minirec: candidate generators](minirec/tasks/candgens/) - metrics, user-item matrix, ALS, BPR, SLIM, embedding storage, runtime iALS
+- Week 3: [minirec: ranking](minirec/tasks/ranking/) - candidate logging, training pool construction, model ranker, Mixigen
+- Week 4: [two-tower models](week04_dl_candgen/homework/homework.ipynb) - metrics, loss functions and negative sampling for candidate generation
+- Week 7: [neural ranking](week07_dl_ranking/homework/homework.ipynb) - feature encoding and a multi-task DCN V2 ranker with a mixture of experts
+- Week 10: [transformers for candidate generation](week10_transformers/homework/homework.ipynb) - dataset, architecture, training and inference
+- Week 13: [Semantic IDs](week13_trends/homework/homework.ipynb) - bonus homework on generative retrieval
+
+Weeks 1-3 are [minirec](minirec/), a production-shaped recommender system you build yourself, with public tests.
+
 ## Staff
 
 - [Daniil Tkachenko](https://github.com/deadpadre)
